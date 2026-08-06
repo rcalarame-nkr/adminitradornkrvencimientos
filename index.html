@@ -1,0 +1,1609 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vencimientos de Polizas</title>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; min-height: 100vh; }
+        
+        .header { background: linear-gradient(135deg, #0070c0, #005a9e); color: white; padding: 20px 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; }
+        .header h1 { font-size: 24px; font-weight: 600; }
+        .header p { opacity: 0.9; margin-top: 5px; font-size: 14px; }
+        
+        .container { max-width: 1400px; margin: 0 auto; padding: 30px; }
+        
+        .upload-zone { background: white; border-radius: 12px; padding: 40px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 30px; border: 2px dashed #d0d0d0; transition: all 0.3s; }
+        .upload-zone:hover { border-color: #0070c0; background: #f8fbff; }
+        .upload-zone.dragover { border-color: #0070c0; background: #e8f4fd; }
+        .upload-zone h2 { color: #333; margin-bottom: 10px; font-size: 18px; }
+        .upload-zone p { color: #666; margin-bottom: 20px; }
+        .upload-zone input[type="file"] { display: none; }
+        .upload-btn { background: #0070c0; color: white; border: none; padding: 12px 30px; border-radius: 8px; font-size: 15px; cursor: pointer; transition: background 0.3s; }
+        .upload-btn:hover { background: #005a9e; }
+        
+        .filters-section { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 20px; display: none; }
+        .filters-section.active { display: block; }
+        .filters-section h3 { font-size: 16px; color: #333; margin-bottom: 15px; }
+        .filters-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; }
+        .filter-group label { display: block; font-weight: 600; color: #555; margin-bottom: 5px; font-size: 12px; text-transform: uppercase; }
+        .filter-group select { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; background: white; max-height: 120px; }
+        .filter-group select[multiple] { height: 120px; }
+        .filter-group select option { padding: 4px 8px; }
+        .filter-group select option:checked { background: #0070c0; color: white; }
+        .filter-actions { margin-top: 15px; display: flex; gap: 10px; }
+        .btn-filter { padding: 8px 20px; border-radius: 6px; font-size: 13px; cursor: pointer; border: none; font-weight: 500; }
+        .btn-filter-primary { background: #28a745; color: white; }
+        .btn-filter-primary:hover { background: #218838; }
+        .btn-filter-secondary { background: #e9ecef; color: #495057; }
+        .btn-filter-secondary:hover { background: #dee2e6; }
+        
+        .table-container { background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow-x: auto; display: none; }
+        .table-container.active { display: block; }
+        .table-header { padding: 15px 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+        .table-header h2 { font-size: 16px; color: #333; }
+        .table-header span { color: #666; font-size: 14px; }
+        
+        .table-wrapper { overflow-x: auto; max-height: 500px; overflow-y: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        thead th { background: #0070c0; padding: 12px 15px; text-align: left; font-weight: 700; color: white; border-bottom: 2px solid #005a9e; position: sticky; top: 0; z-index: 10; white-space: nowrap; }
+        tbody td { padding: 10px 15px; border-bottom: 1px solid #eee; color: #333; white-space: nowrap; }
+        tbody tr { cursor: pointer; transition: background 0.2s; }
+        tbody tr:hover { background: #e8f4fd; }
+        tbody tr.selected { background: #d4edff; }
+        tbody tr.hidden { display: none; }
+        .custom-field-select { padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; background: white; cursor: pointer; max-width: 150px; }
+        .custom-field-select:focus { outline: none; border-color: #0070c0; }
+        
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; padding: 20px; }
+        .modal-overlay.active { display: flex; }
+        
+        .modal { background: white; border-radius: 12px; width: 90%; max-width: 800px; max-height: calc(100vh - 40px); display: flex; flex-direction: column; box-shadow: 0 10px 40px rgba(0,0,0,0.2); animation: modalIn 0.3s ease; }
+        @keyframes modalIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        
+        .modal-header { padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+        .modal-header h3 { font-size: 18px; color: #333; }
+        .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: #999; padding: 5px; }
+        .modal-close:hover { color: #333; }
+        
+        .modal-body { padding: 20px; overflow-y: auto; flex: 1; }
+        .form-group { margin-bottom: 18px; }
+        .form-group label { display: block; font-weight: 600; color: #555; margin-bottom: 6px; font-size: 13px; }
+        .form-group input, .form-group textarea { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; font-family: inherit; transition: border-color 0.3s; }
+        .form-group input:focus, .form-group textarea:focus { outline: none; border-color: #0070c0; }
+        .form-group input[readonly] { background: #f8f9fa; color: #666; cursor: default; }
+        .form-group textarea { min-height: 120px; resize: vertical; }
+        
+        .modal-footer { padding: 15px 20px; border-top: 1px solid #eee; display: flex; justify-content: flex-end; gap: 10px; flex-shrink: 0; }
+        .btn { padding: 10px 24px; border-radius: 6px; font-size: 14px; cursor: pointer; border: none; font-weight: 500; transition: all 0.3s; }
+        .btn-primary { background: #0070c0; color: white; }
+        .btn-primary:hover { background: #005a9e; }
+        .btn-secondary { background: #e9ecef; color: #495057; }
+        .btn-secondary:hover { background: #dee2e6; }
+        
+        #bulkRiesgoSelect { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; background: white; }
+        #bulkRiesgoSelect option { padding: 6px 10px; }
+        #bulkRiesgoSelect option:checked { background: #6f42c1; color: white; }
+        #bulkAsignadoSelect { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; background: white; }
+        
+        .row-estado-renovado { background-color: #d4edda !important; }
+        .row-estado-no-renueva { background-color: #f8d7da !important; }
+        .row-estado-anulada { background-color: #f8d7da !important; }
+        .row-estado-gestion-aseguradora { background-color: #fff3cd !important; }
+        .row-estado-prorrogada { background-color: #d1ecf1 !important; }
+        .row-estado-esperando-respuesta { background-color: #fff3cd !important; }
+        
+        .poliza-info { background: #f8f9fa; border-radius: 8px; padding: 12px; margin-bottom: 15px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+        .poliza-info div { font-size: 13px; }
+        .poliza-info strong { color: #555; }
+
+        /* ===== Responsive ===== */
+        @media (max-width: 1024px) {
+            .container { padding: 20px; }
+            .filters-grid { grid-template-columns: repeat(3, 1fr); }
+        }
+
+        @media (max-width: 768px) {
+            .header { flex-direction: column; align-items: flex-start; gap: 12px; padding: 15px 18px; }
+            .header h1 { font-size: 20px; }
+            .header > div:last-child { display: flex; flex-wrap: wrap; gap: 8px; }
+            .container { padding: 15px; }
+            .upload-zone { padding: 25px 15px; }
+            .filters-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+            .table-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+            .table-header > div:last-child { flex-wrap: wrap; }
+            .poliza-info { grid-template-columns: 1fr; }
+            .modal { width: 95%; }
+            .table-wrapper { max-height: 420px; }
+            table { font-size: 12px; }
+            thead th { padding: 8px 10px; }
+            tbody td { padding: 6px 10px; }
+            .custom-field-select { max-width: 110px; font-size: 11px; padding: 3px 6px; }
+        }
+
+        @media (max-width: 480px) {
+            .header h1 { font-size: 18px; }
+            .header p { font-size: 12px; }
+            .container { padding: 10px; }
+            .filters-grid { grid-template-columns: 1fr; }
+            .filter-actions { flex-wrap: wrap; }
+            .filter-actions .btn-filter { flex: 1 1 auto; }
+            .modal-body { padding: 15px; }
+            .modal-footer { flex-wrap: wrap; }
+            .modal-footer .btn { flex: 1 1 auto; }
+            .upload-zone { padding: 20px 12px; }
+            #polizaInfo, .poliza-info { grid-template-columns: 1fr; }
+            .table-wrapper { max-height: 380px; }
+            table { font-size: 11px; }
+            thead th { padding: 6px 8px; }
+            tbody td { padding: 5px 8px; }
+            .custom-field-select { max-width: 95px; font-size: 10px; padding: 2px 4px; }
+            .table-header h2 { font-size: 14px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div>
+            <h1>Vencimientos de Polizas</h1>
+            <p>Seleccione una poliza para generar el email de renovacion</p>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <button class="btn-filter" style="background: #fd7e14; color: white; display: none;" id="btnLoadCsv" onclick="openCsvFilePicker()">Cargar Datos guardados</button>
+            <button class="btn-filter" style="background: #28a745; color: white; display: none;" id="btnSaveCsv" onclick="openSaveCsvModal()">Guardar Cambios</button>
+            <button class="btn-filter" style="background: #6c757d; color: white; display: none;" id="btnNewFile" onclick="clearStorageAndReload()">Nuevo Archivo</button>
+            <button class="btn-filter btn-filter-primary" id="btnToggleFilters" style="display:none;">Filtros</button>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="upload-zone" id="uploadZone">
+            <h2>Cargar archivo de vencimientos</h2>
+            <p>Arrastre un archivo .xlsx, o haga clic en el boton</p>
+            <input type="file" id="fileInput" accept=".xlsx,.xls">
+            <button class="upload-btn" onclick="document.getElementById('fileInput').click()">Seleccionar archivo</button>
+        </div>
+        
+        <div class="filters-section" id="filtersSection">
+            <h3>Filtros de Busqueda</h3>
+            <div class="filters-grid">
+                <div class="filter-group">
+                    <label>POLIZA</label>
+                    <select id="filterPoliza" multiple></select>
+                </div>
+                <div class="filter-group">
+                    <label>RIESGO</label>
+                    <select id="filterRiesgo" multiple></select>
+                </div>
+                <div class="filter-group">
+                    <label>PRODUCTOR</label>
+                    <select id="filterProductor" multiple></select>
+                </div>
+                <div class="filter-group">
+                    <label>CLIENTE</label>
+                    <select id="filterCliente" multiple></select>
+                </div>
+                <div class="filter-group">
+                    <label>ASEGURADORA</label>
+                    <select id="filterAseguradora" multiple></select>
+                </div>
+                <div class="filter-group">
+                    <label>COBERTURA</label>
+                    <select id="filterCobertura" multiple></select>
+                </div>
+                <div class="filter-group">
+                    <label>VENCIMIENTO</label>
+                    <select id="filterVencimiento" multiple></select>
+                </div>
+                <div class="filter-group">
+                    <label>G. AFINIDAD</label>
+                    <select id="filterGAfinidad" multiple></select>
+                </div>
+                <div class="filter-group">
+                    <label>ASIGNADO A</label>
+                    <select id="filterAsignadoA" multiple></select>
+                </div>
+                <div class="filter-group">
+                    <label>ESTADO</label>
+                    <select id="filterEstado" multiple></select>
+                </div>
+            </div>
+            <div class="filter-actions">
+                <button class="btn-filter btn-filter-primary" onclick="applyFilters()">Aplicar Filtros</button>
+                <button class="btn-filter btn-filter-secondary" onclick="clearFilters()">Limpiar Filtros</button>
+                <button class="btn-filter" style="background: #6f42c1; color: white; display: none;" id="btnBulkAssign" onclick="openBulkAssignModal()">Asignar Masivo</button>
+            </div>
+        </div>
+        
+        <div class="table-container" id="tableContainer">
+            <div class="table-header">
+                <h2>Polizas a vencer</h2>
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <span id="rowCount"></span>
+                    <button class="btn-filter" style="background: #6c757d; color: white;" onclick="copyListadoDirect()">Copiar Listado</button>
+                    <button class="btn-filter btn-filter-primary" onclick="openListadoModal()">Enviar Listado</button>
+                </div>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>POLIZA</th>
+                            <th>RIESGO</th>
+                            <th>COBERTURA</th>
+                            <th>CLIENTE</th>
+                            <th>ASEGURADORA</th>
+                            <th>PRODUCTOR</th>
+                            <th>VENCIMIENTO</th>
+                            <th>MONEDA</th>
+                            <th>SUMA ASEGURADA</th>
+                            <th>G. AFINIDAD</th>
+                            <th>ASIGNADO A</th>
+                            <th>ESTADO</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Enviar Email de Renovacion</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="poliza-info" id="polizaInfo"></div>
+                
+                <div class="form-group">
+                    <label for="emailTo">Destinatario(s)</label>
+                    <input type="email" id="emailTo" placeholder="email@ejemplo.com">
+                </div>
+                
+                <div class="form-group">
+                    <label for="emailCc">Copia (CC)</label>
+                    <input type="email" id="emailCc" placeholder="email@ejemplo.com (opcional)">
+                </div>
+                
+                <div class="form-group">
+                    <label for="emailBcc">Copia Oculta (BCC)</label>
+                    <input type="email" id="emailBcc" placeholder="email@ejemplo.com (opcional)">
+                </div>
+                
+                <div class="form-group">
+                    <label for="emailSubject">Asunto</label>
+                    <input type="text" id="emailSubject">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+                <button class="btn btn-primary" onclick="openEmail()">Abrir Email</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="modal-overlay" id="listadoModalOverlay">
+        <div class="modal" style="max-width: 800px;">
+            <div class="modal-header">
+                <h3>Enviar Listado de Polizas</h3>
+                <button class="modal-close" onclick="closeListadoModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="listadoTo">Destinatario(s)</label>
+                    <input type="email" id="listadoTo" placeholder="email@ejemplo.com">
+                </div>
+                
+                <div class="form-group">
+                    <label for="listadoCc">Copia (CC)</label>
+                    <input type="email" id="listadoCc" placeholder="email@ejemplo.com (opcional)">
+                </div>
+                
+                <div class="form-group">
+                    <label for="listadoBcc">Copia Oculta (BCC)</label>
+                    <input type="email" id="listadoBcc" placeholder="email@ejemplo.com (opcional)">
+                </div>
+                
+                <div class="form-group">
+                    <label for="listadoSubject">Asunto</label>
+                    <input type="text" id="listadoSubject" value="Listado de Polizas a Vencer">
+                </div>
+                
+                <div class="form-group">
+                    <label>Vista previa del listado</label>
+                    <div id="listadoPreview" style="border: 1px solid #ddd; border-radius: 6px; padding: 10px; max-height: 200px; overflow-y: auto; background: #f8f9fa;"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeListadoModal()">Cancelar</button>
+                <button class="btn btn-primary" onclick="openListadoEmail()">Abrir Email</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="modal-overlay" id="saveCsvModalOverlay">
+        <div class="modal" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3>Guardar cambios en CSV</h3>
+                <button class="modal-close" onclick="closeSaveCsvModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="csvFileName">Nombre del archivo</label>
+                    <input type="text" id="csvFileName" placeholder="Ingrese el nombre del archivo">
+                    <small style="color: #666; font-size: 11px;">Se guardara como: <span id="csvPreviewName">nombre_fecha.CSV</span></small>
+                </div>
+                <div style="background: #f8f9fa; padding: 10px; border-radius: 6px; font-size: 12px; color: #666;">
+                    <strong>Formato del archivo:</strong> CSV con columnas: orden, asignadoA, estado
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeSaveCsvModal()">Cancelar</button>
+                <button class="btn btn-primary" onclick="saveCsvFile()">Guardar</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="modal-overlay" id="bulkAssignModalOverlay">
+        <div class="modal" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3>Asignar Pólizas por Riesgo</h3>
+                <button class="modal-close" onclick="closeBulkAssignModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="bulkRiesgoSelect">Seleccione uno o más Riesgos</label>
+                    <select id="bulkRiesgoSelect" multiple style="height: 150px;"></select>
+                </div>
+                <div class="form-group">
+                    <label for="bulkAsignadoSelect">Asignar a</label>
+                    <select id="bulkAsignadoSelect"></select>
+                </div>
+                <div style="background: #e8f4fd; padding: 10px; border-radius: 6px; font-size: 13px; color: #0070c0;">
+                    <strong>Pólizas que serán afectadas: <span id="bulkCount">0</span></strong>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeBulkAssignModal()">Cancelar</button>
+                <button class="btn btn-primary" style="background: #6f42c1;" onclick="applyBulkAssignment()">Asignar</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let allData = [];
+        let filteredData = [];
+        let activeFilters = {};
+        
+        const COLUMN_MAP = {
+            orden: 0,
+            poliza: 1,
+            productor: 3,
+            cliente: 4,
+            aseguradora: 6,
+            riesgo: 7,
+            cobertura: 11,
+            vencimiento: 13,
+            moneda: 16,
+            sumaAsegurada: 18,
+            gAfinidad: 32
+        };
+        
+        const CUSTOM_FIELDS = {
+            asignadoA: {
+                key: 'asignadoA',
+                label: 'ASIGNADO A',
+                options: ['No asignado', 'Rodrigo Calarame', 'Roque Gimenez', 'Guillermo Mayans', 'Lourdes Regner', 'Miguel Civelli', 'Daniela Seoane', 'Jorgelina Diaz'],
+                default: 'No asignado'
+            },
+            estado: {
+                key: 'estado',
+                label: 'ESTADO',
+                options: ['Sin gestion', 'Renovado', 'No renueva', 'Anulada', 'Gestion en la aseguradora', 'Prorrogada', 'Esperando respuesta'],
+                default: 'Sin gestion'
+            }
+        };
+        
+        const FILTER_MAP = {
+            filterPoliza: COLUMN_MAP.poliza,
+            filterRiesgo: COLUMN_MAP.riesgo,
+            filterProductor: COLUMN_MAP.productor,
+            filterCliente: COLUMN_MAP.cliente,
+            filterAseguradora: COLUMN_MAP.aseguradora,
+            filterCobertura: COLUMN_MAP.cobertura,
+            filterVencimiento: COLUMN_MAP.vencimiento,
+            filterGAfinidad: COLUMN_MAP.gAfinidad
+        };
+        
+        const fileInput = document.getElementById('fileInput');
+        const uploadZone = document.getElementById('uploadZone');
+        const tableContainer = document.getElementById('tableContainer');
+        const tableBody = document.getElementById('tableBody');
+        const modalOverlay = document.getElementById('modalOverlay');
+        const filtersSection = document.getElementById('filtersSection');
+        const btnToggleFilters = document.getElementById('btnToggleFilters');
+        const btnNewFile = document.getElementById('btnNewFile');
+        const btnSaveCsv = document.getElementById('btnSaveCsv');
+        const btnLoadCsv = document.getElementById('btnLoadCsv');
+        
+        fileInput.addEventListener('change', handleFile);
+        
+        loadFromStorage();
+        
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('dragover');
+        });
+        
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('dragover');
+        });
+        
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file) {
+                if (file.name.endsWith('.csv')) {
+                    processCsvFile(file);
+                } else {
+                    processFile(file);
+                }
+            }
+        });
+        
+        btnToggleFilters.addEventListener('click', () => {
+            filtersSection.classList.toggle('active');
+        });
+        
+        function handleFile(e) {
+            const file = e.target.files[0];
+            if (file) {
+                processFile(file);
+            }
+        }
+        
+        function openCsvFilePicker() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.csv';
+            input.onchange = function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    processCsvFile(file);
+                }
+            };
+            input.click();
+        }
+        
+        function processCsvFile(file) {
+            if (allData.length === 0) {
+                const storedData = localStorage.getItem('vencimientos_data');
+                if (storedData) {
+                    allData = JSON.parse(storedData);
+                    filteredData = [...allData];
+                } else {
+                    alert('Primero debe cargar un archivo Excel.');
+                    return;
+                }
+            }
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const lines = e.target.result.split('\n').filter(line => line.trim());
+                    
+                    if (lines.length < 2) {
+                        alert('El archivo CSV esta vacio o no tiene datos.');
+                        return;
+                    }
+                    
+                    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+                    
+                    const ordenIndex = headers.indexOf('orden');
+                    const asignadoIndex = headers.indexOf('asignadoa');
+                    const estadoIndex = headers.indexOf('estado');
+                    
+                    if (ordenIndex === -1) {
+                        alert('El archivo CSV no tiene la columna "orden".');
+                        return;
+                    }
+                    
+                    let updatedCount = 0;
+                    
+                    for (let i = 1; i < lines.length; i++) {
+                        const values = parseCsvLine(lines[i]);
+                        
+                        if (values.length < headers.length) continue;
+                        
+                        const orden = values[ordenIndex].trim();
+                        
+                        const rowIndex = allData.findIndex(row => 
+                            String(row[COLUMN_MAP.orden]).trim() === orden
+                        );
+                        
+                        if (rowIndex !== -1) {
+                            if (asignadoIndex !== -1 && values[asignadoIndex]) {
+                                allData[rowIndex].asignadoA = values[asignadoIndex].trim();
+                            }
+                            if (estadoIndex !== -1 && values[estadoIndex]) {
+                                allData[rowIndex].estado = values[estadoIndex].trim();
+                            }
+                            updatedCount++;
+                        }
+                    }
+                    
+                    localStorage.setItem('vencimientos_data', JSON.stringify(allData));
+                    
+                    filteredData = [...allData];
+                    renderTable(filteredData);
+                    populateFilters(allData);
+                    
+                    alert('CSV cargado correctamente. ' + updatedCount + ' polizas actualizadas.');
+                    
+                } catch (err) {
+                    alert('Error al leer el archivo CSV: ' + err.message);
+                }
+            };
+            reader.readAsText(file);
+        }
+        
+        function parseCsvLine(line) {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+            
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    result.push(current);
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            
+            result.push(current);
+            return result;
+        }
+        
+        function processFile(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+                
+                allData = jsonData.slice(3).filter(row => row[COLUMN_MAP.poliza]);
+                
+                allData.forEach(row => {
+                    row.asignadoA = CUSTOM_FIELDS.asignadoA.default;
+                    row.estado = CUSTOM_FIELDS.estado.default;
+                });
+                
+                filteredData = [...allData];
+                
+                localStorage.setItem('vencimientos_data', JSON.stringify(allData));
+                localStorage.setItem('vencimientos_filename', file.name);
+                
+                renderTable(filteredData);
+                populateFilters(allData);
+                
+                uploadZone.style.display = 'none';
+                tableContainer.classList.add('active');
+                filtersSection.classList.add('active');
+                btnToggleFilters.style.display = 'block';
+                btnNewFile.style.display = 'inline-flex';
+                    btnSaveCsv.style.display = 'inline-flex';
+                    btnLoadCsv.style.display = 'inline-flex';
+                    btnBulkAssign.style.display = 'inline-flex';
+            };
+            reader.readAsArrayBuffer(file);
+        }
+        
+        function loadFromStorage() {
+            const storedData = localStorage.getItem('vencimientos_data');
+            const storedFilename = localStorage.getItem('vencimientos_filename');
+            
+            if (storedData) {
+                allData = JSON.parse(storedData);
+                filteredData = [...allData];
+                
+                renderTable(filteredData);
+                populateFilters(allData);
+                
+                uploadZone.style.display = 'none';
+                tableContainer.classList.add('active');
+                filtersSection.classList.add('active');
+                btnToggleFilters.style.display = 'block';
+                btnNewFile.style.display = 'inline-flex';
+                    btnSaveCsv.style.display = 'inline-flex';
+                    btnLoadCsv.style.display = 'inline-flex';
+                    btnBulkAssign.style.display = 'inline-flex';
+                
+                document.getElementById('rowCount').textContent = filteredData.length + ' polizas (' + storedFilename + ')';
+            }
+        }
+        
+        function clearStorageAndReload() {
+            localStorage.removeItem('vencimientos_data');
+            localStorage.removeItem('vencimientos_filename');
+            location.reload();
+        }
+        
+        function getUniqueValues(data, colIndex) {
+            const values = new Set();
+            data.forEach(row => {
+                let val = row[colIndex];
+                if (val !== undefined && val !== null && val !== '') {
+                    if (colIndex === COLUMN_MAP.vencimiento && typeof val === 'number') {
+                        const date = new Date((val - 25569) * 86400000);
+                        const day = String(date.getUTCDate()).padStart(2, '0');
+                        const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+                        const year = date.getUTCFullYear();
+                        val = day + '/' + month + '/' + year;
+                    }
+                    values.add(String(val));
+                }
+            });
+            return Array.from(values).sort();
+        }
+        
+        function populateFilters(data) {
+            Object.keys(FILTER_MAP).forEach(selectId => {
+                const select = document.getElementById(selectId);
+                const colIndex = FILTER_MAP[selectId];
+                const uniqueValues = getUniqueValues(data, colIndex);
+                
+                select.innerHTML = '';
+                
+                const todosOption = document.createElement('option');
+                todosOption.value = '__TODOS__';
+                todosOption.textContent = 'Todos';
+                todosOption.selected = true;
+                select.appendChild(todosOption);
+                
+                uniqueValues.forEach(val => {
+                    const option = document.createElement('option');
+                    option.value = val;
+                    option.textContent = val;
+                    select.appendChild(option);
+                });
+                
+                    select.addEventListener('change', function() {
+                        const options = Array.from(this.options);
+                        const todosOption = options.find(o => o.value === '__TODOS__');
+                        
+                        if (this.value === '__TODOS__') {
+                            options.forEach(o => o.selected = false);
+                            todosOption.selected = true;
+                        } else {
+                            todosOption.selected = false;
+                            const selectedOptions = options.filter(o => o.selected && o.value !== '__TODOS__');
+                            if (selectedOptions.length === 0) {
+                                todosOption.selected = true;
+                            }
+                        }
+                    });
+                });
+                
+                populateCustomFilter('filterAsignadoA', 'asignadoA', CUSTOM_FIELDS.asignadoA.options);
+                populateCustomFilter('filterEstado', 'estado', CUSTOM_FIELDS.estado.options);
+        }
+        
+        function populateCustomFilter(selectId, fieldKey, options) {
+            const select = document.getElementById(selectId);
+            select.innerHTML = '';
+            
+            const todosOption = document.createElement('option');
+            todosOption.value = '__TODOS__';
+            todosOption.textContent = 'Todos';
+            todosOption.selected = true;
+            select.appendChild(todosOption);
+            
+            options.forEach(val => {
+                const option = document.createElement('option');
+                option.value = val;
+                option.textContent = val;
+                select.appendChild(option);
+            });
+            
+            select.addEventListener('change', function() {
+                const opts = Array.from(this.options);
+                const todosOpt = opts.find(o => o.value === '__TODOS__');
+                
+                if (this.value === '__TODOS__') {
+                    opts.forEach(o => o.selected = false);
+                    todosOpt.selected = true;
+                } else {
+                    todosOpt.selected = false;
+                    const selectedOpts = opts.filter(o => o.selected && o.value !== '__TODOS__');
+                    if (selectedOpts.length === 0) {
+                        todosOpt.selected = true;
+                    }
+                }
+            });
+        }
+        
+        function applyFilters() {
+            activeFilters = {};
+            
+            Object.keys(FILTER_MAP).forEach(selectId => {
+                const select = document.getElementById(selectId);
+                const colIndex = FILTER_MAP[selectId];
+                const selectedOptions = Array.from(select.selectedOptions).filter(o => o.value !== '__TODOS__');
+                
+                if (selectedOptions.length > 0) {
+                    activeFilters[colIndex] = selectedOptions.map(o => o.value.toLowerCase());
+                }
+            });
+            
+            const asignadoSelect = document.getElementById('filterAsignadoA');
+            const asignadoSelected = Array.from(asignadoSelect.selectedOptions).filter(o => o.value !== '__TODOS__');
+            if (asignadoSelected.length > 0) {
+                activeFilters['asignadoA'] = asignadoSelected.map(o => o.value.toLowerCase());
+            }
+            
+            const estadoSelect = document.getElementById('filterEstado');
+            const estadoSelected = Array.from(estadoSelect.selectedOptions).filter(o => o.value !== '__TODOS__');
+            if (estadoSelected.length > 0) {
+                activeFilters['estado'] = estadoSelected.map(o => o.value.toLowerCase());
+            }
+            
+            filteredData = allData.filter(row => {
+                for (const [fieldKey, values] of Object.entries(activeFilters)) {
+                    let cellValue = row[fieldKey];
+                    if (cellValue === undefined || cellValue === null) return false;
+                    
+                    if (fieldKey === COLUMN_MAP.vencimiento && typeof cellValue === 'number') {
+                        const date = new Date((cellValue - 25569) * 86400000);
+                        cellValue = `${String(date.getUTCDate()).padStart(2, '0')}/${String(date.getUTCMonth() + 1).padStart(2, '0')}/${date.getUTCFullYear()}`;
+                    }
+                    
+                    if (!values.includes(String(cellValue).toLowerCase())) {
+                        return false;
+                    }
+                }
+                return true;
+            });
+            
+            renderTable(filteredData);
+        }
+        
+        function clearFilters() {
+            activeFilters = {};
+            
+            Object.keys(FILTER_MAP).forEach(selectId => {
+                const select = document.getElementById(selectId);
+                Array.from(select.options).forEach(opt => {
+                    opt.selected = opt.value === '__TODOS__';
+                });
+            });
+            
+            const asignadoSelect = document.getElementById('filterAsignadoA');
+            Array.from(asignadoSelect.options).forEach(opt => {
+                opt.selected = opt.value === '__TODOS__';
+            });
+            
+            const estadoSelect = document.getElementById('filterEstado');
+            Array.from(estadoSelect.options).forEach(opt => {
+                opt.selected = opt.value === '__TODOS__';
+            });
+            
+            filteredData = [...allData];
+            renderTable(filteredData);
+        }
+        
+        function renderTable(data) {
+            tableBody.innerHTML = '';
+            document.getElementById('rowCount').textContent = data.length + ' polizas';
+            
+            data.forEach((row, index) => {
+                const tr = document.createElement('tr');
+                tr.dataset.index = index;
+                
+                const venc = row[COLUMN_MAP.vencimiento];
+                let vencStr = '';
+                if (venc) {
+                    if (typeof venc === 'number') {
+                        const date = new Date((venc - 25569) * 86400000);
+                        vencStr = `${String(date.getUTCDate()).padStart(2, '0')}/${String(date.getUTCMonth() + 1).padStart(2, '0')}/${date.getUTCFullYear()}`;
+                    } else if (typeof venc === 'string' && venc.includes('-')) {
+                        const parts = venc.split('-');
+                        vencStr = parts[2] + '/' + parts[1] + '/' + parts[0];
+                    } else {
+                        vencStr = String(venc);
+                    }
+                }
+                
+                const asignadoA = row.asignadoA || CUSTOM_FIELDS.asignadoA.default;
+                const estado = row.estado || CUSTOM_FIELDS.estado.default;
+                
+                const estadoClass = getEstadoClass(estado);
+                if (estadoClass) {
+                    tr.classList.add(estadoClass);
+                }
+                
+                let asignadoOptions = CUSTOM_FIELDS.asignadoA.options.map(opt => 
+                    `<option value="${opt}" ${opt === asignadoA ? 'selected' : ''}>${opt}</option>`
+                ).join('');
+                
+                let estadoOptions = CUSTOM_FIELDS.estado.options.map(opt => 
+                    `<option value="${opt}" ${opt === estado ? 'selected' : ''}>${opt}</option>`
+                ).join('');
+                
+                tr.innerHTML = `
+                    <td>${row[COLUMN_MAP.poliza] || ''}</td>
+                    <td>${row[COLUMN_MAP.riesgo] || ''}</td>
+                    <td>${row[COLUMN_MAP.cobertura] || ''}</td>
+                    <td>${row[COLUMN_MAP.cliente] || ''}</td>
+                    <td>${row[COLUMN_MAP.aseguradora] || ''}</td>
+                    <td>${row[COLUMN_MAP.productor] || ''}</td>
+                    <td>${vencStr}</td>
+                    <td>${row[COLUMN_MAP.moneda] || ''}</td>
+                    <td>${row[COLUMN_MAP.sumaAsegurada] || ''}</td>
+                    <td>${row[COLUMN_MAP.gAfinidad] || ''}</td>
+                    <td><select class="custom-field-select" data-field="asignadoA" data-row-index="${index}">${asignadoOptions}</select></td>
+                    <td><select class="custom-field-select" data-field="estado" data-row-index="${index}">${estadoOptions}</select></td>
+                `;
+                
+                tr.addEventListener('click', (e) => {
+                    if (!e.target.classList.contains('custom-field-select')) {
+                        selectRow(index);
+                    }
+                });
+                tableBody.appendChild(tr);
+            });
+            
+            document.querySelectorAll('.custom-field-select').forEach(select => {
+                select.addEventListener('change', function() {
+                    const rowIndex = parseInt(this.dataset.rowIndex);
+                    const field = this.dataset.field;
+                    const value = this.value;
+                    
+                    const dataRow = filteredData[rowIndex];
+                    const allDataIndex = allData.findIndex(r => r === dataRow);
+                    
+                    if (allDataIndex !== -1) {
+                        allData[allDataIndex][field] = value;
+                        localStorage.setItem('vencimientos_data', JSON.stringify(allData));
+                        
+                        if (field === 'estado') {
+                            const tr = this.closest('tr');
+                            tr.className = '';
+                            tr.dataset.index = rowIndex;
+                            const newClass = getEstadoClass(value);
+                            if (newClass) {
+                                tr.classList.add(newClass);
+                            }
+                        }
+                    }
+                });
+            });
+        }
+        
+        function getEstadoClass(estado) {
+            const classes = {
+                'Renovado': 'row-estado-renovado',
+                'No renueva': 'row-estado-no-renueva',
+                'Anulada': 'row-estado-anulada',
+                'Gestion en la aseguradora': 'row-estado-gestion-aseguradora',
+                'Prorrogada': 'row-estado-prorrogada',
+                'Esperando respuesta': 'row-estado-esperando-respuesta'
+            };
+            return classes[estado] || '';
+        }
+        
+        function selectRow(index) {
+            document.querySelectorAll('#tableBody tr').forEach(tr => tr.classList.remove('selected'));
+            document.querySelector(`#tableBody tr[data-index="${index}"]`).classList.add('selected');
+            
+            const row = filteredData[index];
+            
+            let venc = row[COLUMN_MAP.vencimiento];
+            let vencStr = '';
+            if (venc) {
+                if (typeof venc === 'number') {
+                    const date = new Date((venc - 25569) * 86400000);
+                    vencStr = `${String(date.getUTCDate()).padStart(2, '0')}/${String(date.getUTCMonth() + 1).padStart(2, '0')}/${date.getUTCFullYear()}`;
+                } else if (typeof venc === 'string' && venc.includes('-')) {
+                    const parts = venc.split('-');
+                    vencStr = parts[2] + '/' + parts[1] + '/' + parts[0];
+                } else {
+                    vencStr = String(venc);
+                }
+            }
+            
+            const poliza = row[COLUMN_MAP.poliza] || '';
+            const riesgo = row[COLUMN_MAP.riesgo] || '';
+            const cobertura = row[COLUMN_MAP.cobertura] || '';
+            const cliente = row[COLUMN_MAP.cliente] || '';
+            const aseguradora = row[COLUMN_MAP.aseguradora] || '';
+            const productor = row[COLUMN_MAP.productor] || '';
+            const moneda = row[COLUMN_MAP.moneda] || '';
+            const sumaAsegurada = row[COLUMN_MAP.sumaAsegurada] || '';
+            const gAfinidad = row[COLUMN_MAP.gAfinidad] || '';
+            
+            const subject = `Renovacion poliza ${poliza} - ${riesgo} - ${cobertura} - Cliente ${cliente} - Aseguradora ${aseguradora} - ${productor} - Vencimiento ${vencStr} - ${gAfinidad}`;
+            
+            document.getElementById('polizaInfo').innerHTML = `
+                <div><strong>Poliza:</strong> ${poliza}</div>
+                <div><strong>Riesgo:</strong> ${riesgo}</div>
+                <div><strong>Cliente:</strong> ${cliente}</div>
+                <div><strong>Aseguradora:</strong> ${aseguradora}</div>
+                <div><strong>Productor:</strong> ${productor}</div>
+                <div><strong>Vencimiento:</strong> ${vencStr}</div>
+                <div><strong>Moneda:</strong> ${moneda}</div>
+                <div><strong>Suma Asegurada:</strong> ${sumaAsegurada}</div>
+            `;
+            
+            document.getElementById('emailSubject').value = subject;
+            
+            modalOverlay.classList.add('active');
+        }
+        
+        function closeModal() {
+            modalOverlay.classList.remove('active');
+        }
+        
+        function openEmail() {
+            const to = document.getElementById('emailTo').value;
+            const cc = document.getElementById('emailCc').value;
+            const bcc = document.getElementById('emailBcc').value;
+            const subject = document.getElementById('emailSubject').value;
+            const body = '';
+            
+            let mailtoUrl = `mailto:${to}`;
+            const params = [];
+            if (cc)      params.push(`cc=${encodeURIComponent(cc)}`);
+            if (bcc)     params.push(`bcc=${encodeURIComponent(bcc)}`);
+            if (subject) params.push(`subject=${encodeURIComponent(subject)}`);
+            if (body)    params.push(`body=${encodeURIComponent(body)}`);
+            if (params.length) mailtoUrl += '?' + params.join('&');
+            
+            window.location.href = mailtoUrl;
+            
+            closeModal();
+        }
+        
+        const listadoModalOverlay = document.getElementById('listadoModalOverlay');
+        
+        function openListadoModal() {
+            if (filteredData.length === 0) {
+                alert('No hay polizas para enviar. Aplique filtros primero.');
+                return;
+            }
+            
+            document.getElementById('listadoTo').value = '';
+            document.getElementById('listadoSubject').value = 'Listado de Polizas a Vencer';
+            
+            generateListadoPreview();
+            
+            listadoModalOverlay.classList.add('active');
+        }
+        
+        function closeListadoModal() {
+            listadoModalOverlay.classList.remove('active');
+        }
+        
+        function generateListadoPreview() {
+            const preview = document.getElementById('listadoPreview');
+            
+            let html = '<table style="width: 100%; border-collapse: collapse; font-size: 12px;">';
+            html += '<thead><tr style="background: #0070c0;">';
+            html += '<th style="padding: 8px; border: 1px solid #ddd; font-weight: bold; color: #ffffff !important;">POLIZA</th>';
+            html += '<th style="padding: 8px; border: 1px solid #ddd; font-weight: bold; color: #ffffff !important;">RIESGO</th>';
+            html += '<th style="padding: 8px; border: 1px solid #ddd; font-weight: bold; color: #ffffff !important;">COBERTURA</th>';
+            html += '<th style="padding: 8px; border: 1px solid #ddd; font-weight: bold; color: #ffffff !important;">CLIENTE</th>';
+            html += '<th style="padding: 8px; border: 1px solid #ddd; font-weight: bold; color: #ffffff !important;">ASEGURADORA</th>';
+            html += '<th style="padding: 8px; border: 1px solid #ddd; font-weight: bold; color: #ffffff !important;">PRODUCTOR</th>';
+            html += '<th style="padding: 8px; border: 1px solid #ddd; font-weight: bold; color: #ffffff !important;">VENCIMIENTO</th>';
+            html += '<th style="padding: 8px; border: 1px solid #ddd; font-weight: bold; color: #ffffff !important;">MONEDA</th>';
+            html += '<th style="padding: 8px; border: 1px solid #ddd; font-weight: bold; color: #ffffff !important;">SUMA ASEGURADA</th>';
+            html += '<th style="padding: 8px; border: 1px solid #ddd; font-weight: bold; color: #ffffff !important;">G. AFINIDAD</th>';
+            html += '<th style="padding: 8px; border: 1px solid #ddd; font-weight: bold; color: #ffffff !important;">ASIGNADO A</th>';
+            html += '<th style="padding: 8px; border: 1px solid #ddd; font-weight: bold; color: #ffffff !important;">ESTADO</th>';
+            html += '</tr></thead><tbody>';
+            
+            filteredData.forEach(row => {
+                let venc = row[COLUMN_MAP.vencimiento];
+                let vencStr = '';
+                if (venc) {
+                    if (typeof venc === 'number') {
+                        const date = new Date((venc - 25569) * 86400000);
+                        vencStr = `${String(date.getUTCDate()).padStart(2, '0')}/${String(date.getUTCMonth() + 1).padStart(2, '0')}/${date.getUTCFullYear()}`;
+                    } else if (typeof venc === 'string' && venc.includes('-')) {
+                        const parts = venc.split('-');
+                        vencStr = parts[2] + '/' + parts[1] + '/' + parts[0];
+                    } else {
+                        vencStr = String(venc);
+                    }
+                }
+                
+                html += '<tr>';
+                html += `<td style="padding: 6px; border: 1px solid #ddd;">${row[COLUMN_MAP.poliza] || ''}</td>`;
+                html += `<td style="padding: 6px; border: 1px solid #ddd;">${row[COLUMN_MAP.riesgo] || ''}</td>`;
+                html += `<td style="padding: 6px; border: 1px solid #ddd;">${row[COLUMN_MAP.cobertura] || ''}</td>`;
+                html += `<td style="padding: 6px; border: 1px solid #ddd;">${row[COLUMN_MAP.cliente] || ''}</td>`;
+                html += `<td style="padding: 6px; border: 1px solid #ddd;">${row[COLUMN_MAP.aseguradora] || ''}</td>`;
+                html += `<td style="padding: 6px; border: 1px solid #ddd;">${row[COLUMN_MAP.productor] || ''}</td>`;
+                html += `<td style="padding: 6px; border: 1px solid #ddd;">${vencStr}</td>`;
+                html += `<td style="padding: 6px; border: 1px solid #ddd;">${row[COLUMN_MAP.moneda] || ''}</td>`;
+                html += `<td style="padding: 6px; border: 1px solid #ddd;">${row[COLUMN_MAP.sumaAsegurada] || ''}</td>`;
+                html += `<td style="padding: 6px; border: 1px solid #ddd;">${row[COLUMN_MAP.gAfinidad] || ''}</td>`;
+                html += `<td style="padding: 6px; border: 1px solid #ddd;">${row.asignadoA || CUSTOM_FIELDS.asignadoA.default}</td>`;
+                html += `<td style="padding: 6px; border: 1px solid #ddd;">${row.estado || CUSTOM_FIELDS.estado.default}</td>`;
+                html += '</tr>';
+            });
+            
+            html += '</tbody></table>';
+            html += `<p style="margin-top: 10px; color: #666; font-size: 11px;">Total: ${filteredData.length} polizas</p>`;
+            
+            preview.innerHTML = html;
+        }
+        
+        function generateListadoHtml() {
+            let html = '<table style="width: 100%; border-collapse: collapse; font-family: Arial, sans-serif;">';
+            html += '<thead><tr style="background-color: #0070c0;">';
+            html += '<th style="padding: 10px; border: 1px solid #ddd; font-weight: bold; color: #ffffff !important;">POLIZA</th>';
+            html += '<th style="padding: 10px; border: 1px solid #ddd; font-weight: bold; color: #ffffff !important;">RIESGO</th>';
+            html += '<th style="padding: 10px; border: 1px solid #ddd; font-weight: bold; color: #ffffff !important;">COBERTURA</th>';
+            html += '<th style="padding: 10px; border: 1px solid #ddd; font-weight: bold; color: #ffffff !important;">CLIENTE</th>';
+            html += '<th style="padding: 10px; border: 1px solid #ddd; font-weight: bold; color: #ffffff !important;">ASEGURADORA</th>';
+            html += '<th style="padding: 10px; border: 1px solid #ddd; font-weight: bold; color: #ffffff !important;">PRODUCTOR</th>';
+            html += '<th style="padding: 10px; border: 1px solid #ddd; font-weight: bold; color: #ffffff !important;">VENCIMIENTO</th>';
+            html += '<th style="padding: 10px; border: 1px solid #ddd; font-weight: bold; color: #ffffff !important;">MONEDA</th>';
+            html += '<th style="padding: 10px; border: 1px solid #ddd; font-weight: bold; color: #ffffff !important;">SUMA ASEGURADA</th>';
+            html += '<th style="padding: 10px; border: 1px solid #ddd; font-weight: bold; color: #ffffff !important;">G. AFINIDAD</th>';
+            html += '</tr></thead><tbody>';
+            
+            filteredData.forEach((row, index) => {
+                const bgColor = index % 2 === 0 ? '#ffffff' : '#f8f9fa';
+                let venc = row[COLUMN_MAP.vencimiento];
+                let vencStr = '';
+                if (venc) {
+                    if (typeof venc === 'number') {
+                        const date = new Date((venc - 25569) * 86400000);
+                        vencStr = `${String(date.getUTCDate()).padStart(2, '0')}/${String(date.getUTCMonth() + 1).padStart(2, '0')}/${date.getUTCFullYear()}`;
+                    } else if (typeof venc === 'string' && venc.includes('-')) {
+                        const parts = venc.split('-');
+                        vencStr = parts[2] + '/' + parts[1] + '/' + parts[0];
+                    } else {
+                        vencStr = String(venc);
+                    }
+                }
+                
+                html += `<tr style="background-color: ${bgColor};">`;
+                html += `<td style="padding: 8px; border: 1px solid #ddd;">${row[COLUMN_MAP.poliza] || ''}</td>`;
+                html += `<td style="padding: 8px; border: 1px solid #ddd;">${row[COLUMN_MAP.riesgo] || ''}</td>`;
+                html += `<td style="padding: 8px; border: 1px solid #ddd;">${row[COLUMN_MAP.cobertura] || ''}</td>`;
+                html += `<td style="padding: 8px; border: 1px solid #ddd;">${row[COLUMN_MAP.cliente] || ''}</td>`;
+                html += `<td style="padding: 8px; border: 1px solid #ddd;">${row[COLUMN_MAP.aseguradora] || ''}</td>`;
+                html += `<td style="padding: 8px; border: 1px solid #ddd;">${row[COLUMN_MAP.productor] || ''}</td>`;
+                html += `<td style="padding: 8px; border: 1px solid #ddd;">${vencStr}</td>`;
+                html += `<td style="padding: 8px; border: 1px solid #ddd;">${row[COLUMN_MAP.moneda] || ''}</td>`;
+                html += `<td style="padding: 8px; border: 1px solid #ddd;">${row[COLUMN_MAP.sumaAsegurada] || ''}</td>`;
+                html += `<td style="padding: 8px; border: 1px solid #ddd;">${row[COLUMN_MAP.gAfinidad] || ''}</td>`;
+                html += '</tr>';
+            });
+            
+            html += '</tbody></table>';
+            html += `<p style="margin-top: 15px; color: #666; font-size: 12px; font-family: Arial, sans-serif;">Total: ${filteredData.length} polizas</p>`;
+            
+            return html;
+        }
+        
+        function copyListadoDirect() {
+            if (filteredData.length === 0) {
+                alert('No hay polizas para copiar.');
+                return;
+            }
+            
+            const listadoHtml = generateListadoHtml();
+            
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = listadoHtml;
+            tempDiv.style.position = 'fixed';
+            tempDiv.style.left = '-9999px';
+            tempDiv.style.top = '0';
+            tempDiv.contentEditable = true;
+            document.body.appendChild(tempDiv);
+            
+            const range = document.createRange();
+            range.selectNodeContents(tempDiv);
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+            
+            try {
+                document.execCommand('copy');
+                selection.removeAllRanges();
+                document.body.removeChild(tempDiv);
+                alert('Listado copiado al portapapeles! (' + filteredData.length + ' polizas)\nPegue con Ctrl+V en Outlook, Word o Excel.');
+            } catch (e) {
+                document.body.removeChild(tempDiv);
+                copyListadoFallback(listadoHtml);
+            }
+        }
+        
+        function copyListadoFallback(html) {
+            const listadoWindow = window.open('', '_blank', 'width=900,height=700');
+            listadoWindow.document.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Copiar Listado</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; padding: 20px; margin: 0; }
+                        h2 { color: #333; margin-bottom: 15px; }
+                        .instructions { background: #fff3cd; border: 1px solid #ffc107; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+                        .table-container { border: 1px solid #ddd; border-radius: 8px; overflow: hidden; margin-bottom: 20px; }
+                        .btn { padding: 10px 20px; border-radius: 6px; border: none; cursor: pointer; font-size: 14px; }
+                        .btn-primary { background: #0070c0; color: white; }
+                        #copyArea { padding: 15px; background: white; }
+                        table { width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; }
+                        th { background-color: #0070c0; color: white; padding: 10px; border: 1px solid #ddd; text-align: left; font-weight: bold; }
+                        td { padding: 8px; border: 1px solid #ddd; }
+                        tr:nth-child(even) { background-color: #f8f9fa; }
+                        tr:nth-child(odd) { background-color: #ffffff; }
+                    </style>
+                </head>
+                <body>
+                    <h2>Copiar Listado de Polizas</h2>
+                    <div class="instructions">
+                        <strong>Instrucciones:</strong>
+                        <ol>
+                            <li>Haga clic en "Copiar Listado"</li>
+                            <li>Cierre esta ventana</li>
+                            <li>Pegue con Ctrl+V en Outlook, Word o Excel</li>
+                        </ol>
+                    </div>
+                    <div class="table-container">
+                        <div id="copyArea" contenteditable="true">${html}</div>
+                    </div>
+                    <button class="btn btn-primary" onclick="copyTable()">Copiar Listado</button>
+                    <script>
+                        function copyTable() {
+                            const copyArea = document.getElementById('copyArea');
+                            const range = document.createRange();
+                            range.selectNodeContents(copyArea);
+                            const selection = window.getSelection();
+                            selection.removeAllRanges();
+                            selection.addRange(range);
+                            document.execCommand('copy');
+                            selection.removeAllRanges();
+                            alert('Listado copiado! Pegue con Ctrl+V');
+                        }
+                    <\/script>
+                </body>
+                </html>
+            `);
+            listadoWindow.document.close();
+        }
+        
+        function openListadoEmail() {
+            const to = document.getElementById('listadoTo').value;
+            const cc = document.getElementById('listadoCc').value;
+            const bcc = document.getElementById('listadoBcc').value;
+            const subject = document.getElementById('listadoSubject').value;
+            const body = '';
+            
+            const listadoHtml = generateListadoHtml();
+            
+            let mailtoUrl = `mailto:${to}`;
+            const params = [];
+            if (cc)      params.push(`cc=${encodeURIComponent(cc)}`);
+            if (bcc)     params.push(`bcc=${encodeURIComponent(bcc)}`);
+            if (subject) params.push(`subject=${encodeURIComponent(subject)}`);
+            if (body)    params.push(`body=${encodeURIComponent(body)}`);
+            if (params.length) mailtoUrl += '?' + params.join('&');
+            
+            if (navigator.clipboard && navigator.clipboard.write) {
+                const htmlBlob = new Blob([listadoHtml], { type: 'text/html' });
+                const textBlob = new Blob([listadoHtml], { type: 'text/plain' });
+                const item = new ClipboardItem({
+                    'text/html': htmlBlob,
+                    'text/plain': textBlob
+                });
+                navigator.clipboard.write([item]).then(() => {
+                    window.location.href = mailtoUrl;
+                    closeListadoModal();
+                }).catch(() => {
+                    copyFallback(listadoHtml, mailtoUrl);
+                });
+            } else {
+                copyFallback(listadoHtml, mailtoUrl);
+            }
+        }
+        
+        function copyFallback(html, mailtoUrl) {
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = html;
+            tempDiv.style.position = 'fixed';
+            tempDiv.style.left = '-9999px';
+            tempDiv.style.top = '0';
+            tempDiv.contentEditable = true;
+            document.body.appendChild(tempDiv);
+            
+            const range = document.createRange();
+            range.selectNodeContents(tempDiv);
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+            
+            try {
+                document.execCommand('copy');
+                selection.removeAllRanges();
+                document.body.removeChild(tempDiv);
+                window.location.href = mailtoUrl;
+                closeListadoModal();
+            } catch (e) {
+                document.body.removeChild(tempDiv);
+                alert('No se pudo copiar automaticamente. Se abrira una ventana para copiar el listado.');
+                openListadoWindow(html, mailtoUrl);
+            }
+        }
+        
+        function openListadoWindow(listadoHtml, mailtoUrl) {
+            const listadoWindow = window.open('', '_blank', 'width=900,height=700');
+            listadoWindow.document.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Listado de Polizas</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; padding: 20px; margin: 0; }
+                        h2 { color: #333; margin-bottom: 15px; }
+                        .instructions { background: #fff3cd; border: 1px solid #ffc107; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+                        .table-container { border: 1px solid #ddd; border-radius: 8px; overflow: hidden; margin-bottom: 20px; }
+                        .btn { padding: 10px 20px; border-radius: 6px; border: none; cursor: pointer; font-size: 14px; margin-right: 10px; }
+                        .btn-primary { background: #0070c0; color: white; }
+                        .btn-success { background: #28a745; color: white; }
+                        #copyArea { padding: 15px; background: white; }
+                        table { width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; }
+                        th { background-color: #0070c0; color: white; padding: 10px; border: 1px solid #ddd; text-align: left; font-weight: bold; }
+                        td { padding: 8px; border: 1px solid #ddd; }
+                        tr:nth-child(even) { background-color: #f8f9fa; }
+                        tr:nth-child(odd) { background-color: #ffffff; }
+                    </style>
+                </head>
+                <body>
+                    <h2>Listado de Polizas</h2>
+                    <div class="instructions">
+                        <strong>Instrucciones:</strong>
+                        <ol>
+                            <li>Haga clic en "Copiar Listado"</li>
+                            <li>Cierre esta ventana</li>
+                            <li>En Outlook, pegue en el cuerpo del email (Ctrl+V)</li>
+                        </ol>
+                    </div>
+                    <div class="table-container">
+                        <div id="copyArea" contenteditable="true">${listadoHtml}</div>
+                    </div>
+                    <button class="btn btn-primary" onclick="copyTable()">Copiar Listado</button>
+                    <script>
+                        function copyTable() {
+                            const copyArea = document.getElementById('copyArea');
+                            const range = document.createRange();
+                            range.selectNodeContents(copyArea);
+                            const selection = window.getSelection();
+                            selection.removeAllRanges();
+                            selection.addRange(range);
+                            document.execCommand('copy');
+                            selection.removeAllRanges();
+                            alert('Listado copiado! Pegue en el email con Ctrl+V');
+                        }
+                    <\/script>
+                </body>
+                </html>
+            `);
+            listadoWindow.document.close();
+        }
+        
+        listadoModalOverlay.addEventListener('click', (e) => {
+            if (e.target === listadoModalOverlay) closeListadoModal();
+        });
+        
+        modalOverlay.addEventListener('click', (e) => {
+            if (e.target === modalOverlay) closeModal();
+        });
+        
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+                closeListadoModal();
+                closeSaveJsonModal();
+            }
+        });
+        
+        const saveCsvModalOverlay = document.getElementById('saveCsvModalOverlay');
+        
+        function openSaveCsvModal() {
+            if (allData.length === 0) {
+                const storedData = localStorage.getItem('vencimientos_data');
+                if (storedData) {
+                    allData = JSON.parse(storedData);
+                    filteredData = [...allData];
+                } else {
+                    alert('No hay datos para guardar.');
+                    return;
+                }
+            }
+            document.getElementById('csvFileName').value = '';
+            updateCsvPreview();
+            saveCsvModalOverlay.classList.add('active');
+        }
+        
+        function closeSaveCsvModal() {
+            saveCsvModalOverlay.classList.remove('active');
+        }
+        
+        function getTodayStr() {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function updateCsvPreview() {
+            const name = document.getElementById('csvFileName').value.trim();
+            const dateStr = getTodayStr();
+            const preview = name ? `${name}_${dateStr}.CSV` : 'archivo_fecha.CSV';
+            document.getElementById('csvPreviewName').textContent = preview;
+        }
+        
+        document.getElementById('csvFileName').addEventListener('input', updateCsvPreview);
+        
+        async function saveCsvFile() {
+            const name = document.getElementById('csvFileName').value.trim();
+            if (!name) {
+                alert('Por favor, ingrese un nombre para el archivo.');
+                return;
+            }
+            
+            const today = new Date();
+            const dateStr = getTodayStr();
+            const fileName = `${name}_${dateStr}.csv`;
+            
+            const csvRows = ['orden,asignadoA,estado'];
+            
+            allData.forEach(row => {
+                const orden = row[COLUMN_MAP.orden] || '';
+                const asignadoA = row.asignadoA || CUSTOM_FIELDS.asignadoA.default;
+                const estado = row.estado || CUSTOM_FIELDS.estado.default;
+                
+                const escapedOrden = String(orden).includes(',') ? `"${orden}"` : orden;
+                const escapedAsignado = String(asignadoA).includes(',') ? `"${asignadoA}"` : asignadoA;
+                const escapedEstado = String(estado).includes(',') ? `"${estado}"` : estado;
+                
+                csvRows.push(`${escapedOrden},${escapedAsignado},${escapedEstado}`);
+            });
+            
+            const csvContent = csvRows.join('\n');
+            
+            if ('showSaveFilePicker' in window) {
+                try {
+                    const handle = await window.showSaveFilePicker({
+                        suggestedName: fileName,
+                        types: [{
+                            description: 'CSV File',
+                            accept: { 'text/csv': ['.csv'] }
+                        }]
+                    });
+                    
+                    const writable = await handle.createWritable();
+                    await writable.write('\ufeff' + csvContent);
+                    await writable.close();
+                    
+                    closeSaveCsvModal();
+                    alert('Archivo CSV guardado: ' + fileName);
+                } catch (err) {
+                    if (err.name !== 'AbortError') {
+                        alert('Error al guardar: ' + err.message);
+                    }
+                }
+            } else {
+                const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                closeSaveCsvModal();
+                alert('Archivo CSV guardado: ' + fileName);
+            }
+        }
+        
+        async function saveJsonFile() {
+            const name = document.getElementById('jsonFileName').value.trim();
+            if (!name) {
+                alert('Por favor, ingrese un nombre para el archivo.');
+                return;
+            }
+            
+            const today = new Date();
+            const dateStr = getTodayStr();
+            const fileName = `${name}_${dateStr}.JSON`;
+            
+            const exportData = allData.map(row => {
+                let vencValue = row[COLUMN_MAP.vencimiento];
+                if (typeof vencValue === 'number') {
+                    const excelDate = new Date((vencValue - 25569) * 86400000);
+                    const year = excelDate.getUTCFullYear();
+                    const month = String(excelDate.getUTCMonth() + 1).padStart(2, '0');
+                    const day = String(excelDate.getUTCDate()).padStart(2, '0');
+                    vencValue = `${year}-${month}-${day}`;
+                }
+                
+                return {
+                    poliza: row[COLUMN_MAP.poliza] || '',
+                    productor: row[COLUMN_MAP.productor] || '',
+                    cliente: row[COLUMN_MAP.cliente] || '',
+                    aseguradora: row[COLUMN_MAP.aseguradora] || '',
+                    riesgo: row[COLUMN_MAP.riesgo] || '',
+                    cobertura: row[COLUMN_MAP.cobertura] || '',
+                    vencimiento: vencValue || '',
+                    moneda: row[COLUMN_MAP.moneda] || '',
+                    sumaAsegurada: row[COLUMN_MAP.sumaAsegurada] || '',
+                    gAfinidad: row[COLUMN_MAP.gAfinidad] || '',
+                    asignadoA: row.asignadoA || CUSTOM_FIELDS.asignadoA.default,
+                    estado: row.estado || CUSTOM_FIELDS.estado.default
+                };
+            });
+            
+            const jsonData = JSON.stringify(exportData, null, 2);
+            
+            if ('showSaveFilePicker' in window) {
+                try {
+                    const handle = await window.showSaveFilePicker({
+                        suggestedName: fileName,
+                        types: [{
+                            description: 'JSON File',
+                            accept: { 'application/json': ['.JSON'] }
+                        }]
+                    });
+                    
+                    const writable = await handle.createWritable();
+                    await writable.write(jsonData);
+                    await writable.close();
+                    
+                    closeSaveJsonModal();
+                    alert('Archivo guardado: ' + fileName);
+                } catch (err) {
+                    if (err.name !== 'AbortError') {
+                        alert('Error al guardar: ' + err.message);
+                    }
+                }
+            }
+        }
+        
+        const bulkAssignModalOverlay = document.getElementById('bulkAssignModalOverlay');
+        
+        function openBulkAssignModal() {
+            if (allData.length === 0) {
+                alert('No hay datos cargados. Primero cargue un archivo Excel.');
+                return;
+            }
+            
+            const riesgoSelect = document.getElementById('bulkRiesgoSelect');
+            const asignadoSelect = document.getElementById('bulkAsignadoSelect');
+            
+            riesgoSelect.innerHTML = '';
+            const uniqueRiesgos = getUniqueValues(allData, COLUMN_MAP.riesgo);
+            uniqueRiesgos.forEach(riesgo => {
+                if (riesgo && riesgo !== '__TODOS__') {
+                    const option = document.createElement('option');
+                    option.value = riesgo;
+                    option.textContent = riesgo;
+                    riesgoSelect.appendChild(option);
+                }
+            });
+            
+            asignadoSelect.innerHTML = '';
+            CUSTOM_FIELDS.asignadoA.options.forEach(opt => {
+                if (opt !== 'No asignado') {
+                    const option = document.createElement('option');
+                    option.value = opt;
+                    option.textContent = opt;
+                    asignadoSelect.appendChild(option);
+                }
+            });
+            
+            updateBulkCount();
+            
+            riesgoSelect.addEventListener('change', updateBulkCount);
+            
+            bulkAssignModalOverlay.classList.add('active');
+        }
+        
+        function closeBulkAssignModal() {
+            bulkAssignModalOverlay.classList.remove('active');
+        }
+        
+        function updateBulkCount() {
+            const riesgoSelect = document.getElementById('bulkRiesgoSelect');
+            const selectedRiesgos = Array.from(riesgoSelect.selectedOptions).map(opt => opt.value);
+            
+            if (selectedRiesgos.length === 0) {
+                document.getElementById('bulkCount').textContent = '0';
+                return;
+            }
+            
+            const count = allData.filter(row => {
+                const riesgo = row[COLUMN_MAP.riesgo];
+                return selectedRiesgos.includes(riesgo);
+            }).length;
+            
+            document.getElementById('bulkCount').textContent = count;
+        }
+        
+        function applyBulkAssignment() {
+            const riesgoSelect = document.getElementById('bulkRiesgoSelect');
+            const asignadoSelect = document.getElementById('bulkAsignadoSelect');
+            
+            const selectedRiesgos = Array.from(riesgoSelect.selectedOptions).map(opt => opt.value);
+            const selectedUsuario = asignadoSelect.value;
+            
+            if (selectedRiesgos.length === 0) {
+                alert('Por favor, seleccione al menos un riesgo.');
+                return;
+            }
+            
+            if (!selectedUsuario) {
+                alert('Por favor, seleccione un usuario para asignar.');
+                return;
+            }
+            
+            let affectedCount = 0;
+            
+            allData.forEach((row, index) => {
+                const riesgo = row[COLUMN_MAP.riesgo];
+                if (selectedRiesgos.includes(riesgo)) {
+                    allData[index].asignadoA = selectedUsuario;
+                    affectedCount++;
+                }
+            });
+            
+            localStorage.setItem('vencimientos_data', JSON.stringify(allData));
+            
+            filteredData = [...allData];
+            renderTable(filteredData);
+            
+            closeBulkAssignModal();
+            
+            alert(`Se asignaron ${affectedCount} pólizas a ${selectedUsuario}`);
+        }
+        
+        bulkAssignModalOverlay.addEventListener('click', (e) => {
+            if (e.target === bulkAssignModalOverlay) closeBulkAssignModal();
+        });
+        
+        saveCsvModalOverlay.addEventListener('click', (e) => {
+            if (e.target === saveCsvModalOverlay) closeSaveCsvModal();
+        });
+        
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+                closeListadoModal();
+                closeSaveCsvModal();
+                closeBulkAssignModal();
+            }
+        });
+    </script>
+</body>
+</html>
