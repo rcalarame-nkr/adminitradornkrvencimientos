@@ -46,7 +46,10 @@
         .table-header h2 { font-size: 16px; color: #333; }
         .table-header span { color: #666; font-size: 14px; }
         
-        .table-wrapper { overflow-x: auto; max-height: 500px; overflow-y: auto; }
+        .table-wrapper { overflow-x: scroll; max-height: 500px; overflow-y: auto; }
+        .top-scrollbar { overflow-x: scroll; height: 16px; margin-bottom: 2px; display: none; }
+        .top-scrollbar.active { display: block; }
+        .top-scrollbar-content { height: 1px; }
         table { width: 100%; border-collapse: collapse; font-size: 13px; }
         thead th { background: #0070c0; padding: 12px 15px; text-align: left; font-weight: 700; color: white; border-bottom: 2px solid #005a9e; position: sticky; top: 0; z-index: 10; white-space: nowrap; }
         tbody td { padding: 10px 15px; border-bottom: 1px solid #eee; color: #333; white-space: nowrap; }
@@ -154,7 +157,7 @@
             <button class="btn-filter" style="background: #fd7e14; color: white; display: none;" id="btnLoadCsv" onclick="openCsvFilePicker()">Cargar Datos guardados</button>
             <button class="btn-filter" style="background: #28a745; color: white; display: none;" id="btnSaveCsv" onclick="openSaveCsvModal()">Guardar Cambios</button>
             <button class="btn-filter" style="background: #6c757d; color: white; display: none;" id="btnNewFile" onclick="clearStorageAndReload()">Nuevo Archivo</button>
-            <button class="btn-filter btn-filter-primary" id="btnToggleFilters" style="display:none;">Filtros</button>
+            <button class="btn-filter btn-filter-primary" id="btnToggleFilters" style="display:none;">Mostrar filtros</button>
         </div>
     </div>
     
@@ -226,7 +229,10 @@
                     <button class="btn-filter btn-filter-primary" onclick="openListadoModal()">Enviar Listado</button>
                 </div>
             </div>
-            <div class="table-wrapper">
+            <div class="top-scrollbar" id="topScrollbar">
+                <div class="top-scrollbar-content" id="topScrollbarContent"></div>
+            </div>
+            <div class="table-wrapper" id="tableWrapper">
                 <table>
                     <thead>
                         <tr>
@@ -374,10 +380,38 @@
         </div>
     </div>
     
+    <div class="modal-overlay" id="detailModalOverlay">
+        <div class="modal" style="max-width: 700px;">
+            <div class="modal-header">
+                <h3>Detalle de Poliza</h3>
+                <button class="modal-close" onclick="closeDetailModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="poliza-info" id="detailPolizaInfo"></div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px;">
+                    <div class="form-group">
+                        <label for="detailAsignadoA">ASIGNADO A</label>
+                        <select id="detailAsignadoA" style="width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;"></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="detailEstado">ESTADO</label>
+                        <select id="detailEstado" style="width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;"></select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeDetailModal()">Cancelar</button>
+                <button class="btn btn-primary" onclick="saveDetailModal()">Guardar</button>
+                <button class="btn btn-primary" style="background: #28a745;" onclick="detailSendEmail()">Enviar Email</button>
+            </div>
+        </div>
+    </div>
+    
     <script>
         let allData = [];
         let filteredData = [];
         let activeFilters = {};
+        let selectedRowIndex = null;
         
         const COLUMN_MAP = {
             orden: 0,
@@ -397,7 +431,7 @@
             asignadoA: {
                 key: 'asignadoA',
                 label: 'ASIGNADO A',
-                options: ['No asignado', 'Rodrigo Calarame', 'Roque Gimenez', 'Guillermo Mayans', 'Lourdes Regner', 'Miguel Civelli', 'Daniela Seoane', 'Jorgelina Diaz'],
+                options: ['No asignado', 'Rodrigo Calarame', 'Roque Jimenez', 'Guillermo Mayans', 'Lourdes Regner', 'Miguel Civelli', 'Daniela Seoane', 'Jorgelina Diaz'],
                 default: 'No asignado'
             },
             estado: {
@@ -429,8 +463,19 @@
         const btnNewFile = document.getElementById('btnNewFile');
         const btnSaveCsv = document.getElementById('btnSaveCsv');
         const btnLoadCsv = document.getElementById('btnLoadCsv');
+        const tableWrapper = document.getElementById('tableWrapper');
+        const topScrollbar = document.getElementById('topScrollbar');
+        const topScrollbarContent = document.getElementById('topScrollbarContent');
         
         fileInput.addEventListener('change', handleFile);
+        
+        tableWrapper.addEventListener('scroll', function() {
+            topScrollbar.scrollLeft = this.scrollLeft;
+        });
+        
+        topScrollbar.addEventListener('scroll', function() {
+            tableWrapper.scrollLeft = this.scrollLeft;
+        });
         
         loadFromStorage();
         
@@ -458,6 +503,7 @@
         
         btnToggleFilters.addEventListener('click', () => {
             filtersSection.classList.toggle('active');
+            btnToggleFilters.textContent = filtersSection.classList.contains('active') ? 'Ocultar filtros' : 'Mostrar filtros';
         });
         
         function handleFile(e) {
@@ -601,6 +647,7 @@
                 tableContainer.classList.add('active');
                 filtersSection.classList.add('active');
                 btnToggleFilters.style.display = 'block';
+                btnToggleFilters.textContent = 'Ocultar filtros';
                 btnNewFile.style.display = 'inline-flex';
                     btnSaveCsv.style.display = 'inline-flex';
                     btnLoadCsv.style.display = 'inline-flex';
@@ -624,6 +671,7 @@
                 tableContainer.classList.add('active');
                 filtersSection.classList.add('active');
                 btnToggleFilters.style.display = 'block';
+                btnToggleFilters.textContent = 'Ocultar filtros';
                 btnNewFile.style.display = 'inline-flex';
                     btnSaveCsv.style.display = 'inline-flex';
                     btnLoadCsv.style.display = 'inline-flex';
@@ -888,6 +936,8 @@
                     }
                 });
             });
+            
+            updateTopScrollbar();
         }
         
         function getEstadoClass(estado) {
@@ -905,7 +955,31 @@
         function selectRow(index) {
             document.querySelectorAll('#tableBody tr').forEach(tr => tr.classList.remove('selected'));
             document.querySelector(`#tableBody tr[data-index="${index}"]`).classList.add('selected');
-            
+            selectedRowIndex = index;
+            openDetailModal(index);
+        }
+        
+        function closeModal() {
+            modalOverlay.classList.remove('active');
+        }
+        
+        const detailModalOverlay = document.getElementById('detailModalOverlay');
+        
+        function updateTopScrollbar() {
+            const table = tableWrapper.querySelector('table');
+            if (table) {
+                topScrollbarContent.style.width = table.scrollWidth + 'px';
+                if (table.scrollWidth > tableWrapper.clientWidth) {
+                    topScrollbar.classList.add('active');
+                } else {
+                    topScrollbar.classList.remove('active');
+                }
+            }
+        }
+        
+        window.addEventListener('resize', updateTopScrollbar);
+        
+        function openDetailModal(index) {
             const row = filteredData[index];
             
             let venc = row[COLUMN_MAP.vencimiento];
@@ -931,8 +1005,90 @@
             const moneda = row[COLUMN_MAP.moneda] || '';
             const sumaAsegurada = row[COLUMN_MAP.sumaAsegurada] || '';
             const gAfinidad = row[COLUMN_MAP.gAfinidad] || '';
+            const asignadoA = row.asignadoA || CUSTOM_FIELDS.asignadoA.default;
+            const estado = row.estado || CUSTOM_FIELDS.estado.default;
             
-            const subject = `Renovacion poliza ${poliza} - ${riesgo} - ${cobertura} - Cliente ${cliente} - Aseguradora ${aseguradora} - ${productor} - Vencimiento ${vencStr} - ${gAfinidad}`;
+            document.getElementById('detailPolizaInfo').innerHTML = `
+                <div><strong>Poliza:</strong> ${poliza}</div>
+                <div><strong>Riesgo:</strong> ${riesgo}</div>
+                <div><strong>Cobertura:</strong> ${cobertura}</div>
+                <div><strong>Cliente:</strong> ${cliente}</div>
+                <div><strong>Aseguradora:</strong> ${aseguradora}</div>
+                <div><strong>Productor:</strong> ${productor}</div>
+                <div><strong>Vencimiento:</strong> ${vencStr}</div>
+                <div><strong>Moneda:</strong> ${moneda}</div>
+                <div><strong>Suma Asegurada:</strong> ${sumaAsegurada}</div>
+                <div><strong>G. Afinidad:</strong> ${gAfinidad}</div>
+            `;
+            
+            const asignadoSelect = document.getElementById('detailAsignadoA');
+            asignadoSelect.innerHTML = CUSTOM_FIELDS.asignadoA.options.map(opt =>
+                `<option value="${opt}" ${opt === asignadoA ? 'selected' : ''}>${opt}</option>`
+            ).join('');
+            
+            const estadoSelect = document.getElementById('detailEstado');
+            estadoSelect.innerHTML = CUSTOM_FIELDS.estado.options.map(opt =>
+                `<option value="${opt}" ${opt === estado ? 'selected' : ''}>${opt}</option>`
+            ).join('');
+            
+            detailModalOverlay.classList.add('active');
+        }
+        
+        function closeDetailModal() {
+            detailModalOverlay.classList.remove('active');
+        }
+        
+        function saveDetailModal() {
+            if (selectedRowIndex === null) return;
+            
+            const row = filteredData[selectedRowIndex];
+            const allDataIndex = allData.findIndex(r => r === row);
+            
+            if (allDataIndex !== -1) {
+                allData[allDataIndex].asignadoA = document.getElementById('detailAsignadoA').value;
+                allData[allDataIndex].estado = document.getElementById('detailEstado').value;
+                localStorage.setItem('vencimientos_data', JSON.stringify(allData));
+            }
+            
+            closeDetailModal();
+            renderTable(filteredData);
+            
+            if (selectedRowIndex !== null) {
+                const newTr = document.querySelector(`#tableBody tr[data-index="${selectedRowIndex}"]`);
+                if (newTr) newTr.classList.add('selected');
+            }
+        }
+        
+        function detailSendEmail() {
+            if (selectedRowIndex === null) return;
+            
+            const row = filteredData[selectedRowIndex];
+            
+            let venc = row[COLUMN_MAP.vencimiento];
+            let vencStr = '';
+            if (venc) {
+                if (typeof venc === 'number') {
+                    const date = new Date((venc - 25569) * 86400000);
+                    vencStr = `${String(date.getUTCDate()).padStart(2, '0')}/${String(date.getUTCMonth() + 1).padStart(2, '0')}/${date.getUTCFullYear()}`;
+                } else if (typeof venc === 'string' && venc.includes('-')) {
+                    const parts = venc.split('-');
+                    vencStr = parts[2] + '/' + parts[1] + '/' + parts[0];
+                } else {
+                    vencStr = String(venc);
+                }
+            }
+            
+            const poliza = row[COLUMN_MAP.poliza] || '';
+            const riesgo = row[COLUMN_MAP.riesgo] || '';
+            const cobertura = row[COLUMN_MAP.cobertura] || '';
+            const cliente = row[COLUMN_MAP.cliente] || '';
+            const aseguradora = row[COLUMN_MAP.aseguradora] || '';
+            const productor = row[COLUMN_MAP.productor] || '';
+            const moneda = row[COLUMN_MAP.moneda] || '';
+            const sumaAsegurada = row[COLUMN_MAP.sumaAsegurada] || '';
+            const gAfinidad = row[COLUMN_MAP.gAfinidad] || '';
+            
+            const subject = `Renovación póliza ${poliza} - ${riesgo} - ${cobertura} - Cliente ${cliente} - Aseguradora ${aseguradora} - ${productor} - Vencimiento ${vencStr} - ${gAfinidad}`;
             
             document.getElementById('polizaInfo').innerHTML = `
                 <div><strong>Poliza:</strong> ${poliza}</div>
@@ -947,11 +1103,8 @@
             
             document.getElementById('emailSubject').value = subject;
             
+            closeDetailModal();
             modalOverlay.classList.add('active');
-        }
-        
-        function closeModal() {
-            modalOverlay.classList.remove('active');
         }
         
         function openEmail() {
@@ -1316,11 +1469,15 @@
             if (e.target === modalOverlay) closeModal();
         });
         
+        detailModalOverlay.addEventListener('click', (e) => {
+            if (e.target === detailModalOverlay) closeDetailModal();
+        });
+        
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 closeModal();
+                closeDetailModal();
                 closeListadoModal();
-                closeSaveJsonModal();
             }
         });
         
@@ -1351,7 +1508,7 @@
             const year = today.getFullYear();
             const month = String(today.getMonth() + 1).padStart(2, '0');
             const day = String(today.getDate()).padStart(2, '0');
-            return `${year}-${month}-${day}`;
+            return `${day}-${month}-${year}`;
         }
 
         function updateCsvPreview() {
@@ -1428,68 +1585,7 @@
             }
         }
         
-        async function saveJsonFile() {
-            const name = document.getElementById('jsonFileName').value.trim();
-            if (!name) {
-                alert('Por favor, ingrese un nombre para el archivo.');
-                return;
-            }
-            
-            const today = new Date();
-            const dateStr = getTodayStr();
-            const fileName = `${name}_${dateStr}.JSON`;
-            
-            const exportData = allData.map(row => {
-                let vencValue = row[COLUMN_MAP.vencimiento];
-                if (typeof vencValue === 'number') {
-                    const excelDate = new Date((vencValue - 25569) * 86400000);
-                    const year = excelDate.getUTCFullYear();
-                    const month = String(excelDate.getUTCMonth() + 1).padStart(2, '0');
-                    const day = String(excelDate.getUTCDate()).padStart(2, '0');
-                    vencValue = `${year}-${month}-${day}`;
-                }
-                
-                return {
-                    poliza: row[COLUMN_MAP.poliza] || '',
-                    productor: row[COLUMN_MAP.productor] || '',
-                    cliente: row[COLUMN_MAP.cliente] || '',
-                    aseguradora: row[COLUMN_MAP.aseguradora] || '',
-                    riesgo: row[COLUMN_MAP.riesgo] || '',
-                    cobertura: row[COLUMN_MAP.cobertura] || '',
-                    vencimiento: vencValue || '',
-                    moneda: row[COLUMN_MAP.moneda] || '',
-                    sumaAsegurada: row[COLUMN_MAP.sumaAsegurada] || '',
-                    gAfinidad: row[COLUMN_MAP.gAfinidad] || '',
-                    asignadoA: row.asignadoA || CUSTOM_FIELDS.asignadoA.default,
-                    estado: row.estado || CUSTOM_FIELDS.estado.default
-                };
-            });
-            
-            const jsonData = JSON.stringify(exportData, null, 2);
-            
-            if ('showSaveFilePicker' in window) {
-                try {
-                    const handle = await window.showSaveFilePicker({
-                        suggestedName: fileName,
-                        types: [{
-                            description: 'JSON File',
-                            accept: { 'application/json': ['.JSON'] }
-                        }]
-                    });
-                    
-                    const writable = await handle.createWritable();
-                    await writable.write(jsonData);
-                    await writable.close();
-                    
-                    closeSaveJsonModal();
-                    alert('Archivo guardado: ' + fileName);
-                } catch (err) {
-                    if (err.name !== 'AbortError') {
-                        alert('Error al guardar: ' + err.message);
-                    }
-                }
-            }
-        }
+
         
         const bulkAssignModalOverlay = document.getElementById('bulkAssignModalOverlay');
         
@@ -1580,8 +1676,7 @@
             
             localStorage.setItem('vencimientos_data', JSON.stringify(allData));
             
-            filteredData = [...allData];
-            renderTable(filteredData);
+            applyFilters();
             
             closeBulkAssignModal();
             
@@ -1599,6 +1694,7 @@
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 closeModal();
+                closeDetailModal();
                 closeListadoModal();
                 closeSaveCsvModal();
                 closeBulkAssignModal();
